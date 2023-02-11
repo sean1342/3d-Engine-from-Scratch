@@ -43,6 +43,20 @@ struct triangle
 	float dp;
 };
 
+glm::vec4 MultiplyMatrixVector(glm::vec4 &i, glm::mat4 &m)
+{
+	glm::vec4 o;
+	o.x = i.x * m[0][0] + i.y * m[1][0] + i.z * m[2][0] + m[3][0];
+	o.y = i.x * m[0][1] + i.y * m[1][1] + i.z * m[2][1] + m[3][1];
+	o.z = i.x * m[0][2] + i.y * m[1][2] + i.z * m[2][2] + m[3][2];
+	float w = i.x * m[0][3] + i.y * m[1][3] + i.z * m[2][3] + m[3][3];
+
+	if (w != 0.0f)
+		o.x /= w; o.y /= w; o.z /= w;
+
+	return o;
+}
+
 struct mesh
 {
 	std::vector<triangle> tris;
@@ -99,13 +113,13 @@ glm::mat4 mat_proj;
 
 mesh obj;
 
-glm::vec4 v_cam;
+glm::vec3 v_cam;
 
 int main(int argc, char *argv[])
 {
 	SDL_Init(SCREEN_WIDTH, SCREEN_HEIGHT);
 
-	obj.LoadFromObjectFile("teapot.obj");
+	obj.LoadFromObjectFile("video_ship.obj");
 
 	mat_proj[0][0] = f_ASPECT_RATIO * f_FOV_RAD;
 	mat_proj[1][1] = f_FOV_RAD;
@@ -133,10 +147,11 @@ int main(int argc, char *argv[])
 			// project tri -> tri_projected
 			triangle tri_projected, tri_translated;
 
+			// Offset into the screen
 			tri_translated = tri;
-			tri_translated.p[0].z = tri.p[0].z + 10.0f;
-			tri_translated.p[1].z = tri.p[1].z + 10.0f;
-			tri_translated.p[2].z = tri.p[2].z + 10.0f;
+			tri_translated.p[0].z = tri.p[0].z + 8.0f;
+			tri_translated.p[1].z = tri.p[1].z + 8.0f;
+			tri_translated.p[2].z = tri.p[2].z + 8.0f;
 
 			glm::vec3 normal, line1, line2;
 			line1.x = tri_translated.p[1].x - tri_translated.p[0].x;
@@ -150,7 +165,7 @@ int main(int argc, char *argv[])
 			normal.x = line1.y * line2.z - line1.z * line2.y;
 			normal.y = line1.z * line2.x - line1.x * line2.z;
 			normal.z = line1.x * line2.y - line1.y * line2.x;
-			
+
 			float l = sqrtf(normal.x*normal.x + normal.y*normal.y + normal.z*normal.z);
 			normal.x /= l; normal.y /= l; normal.z /= l;
 
@@ -166,13 +181,13 @@ int main(int argc, char *argv[])
 				// how similar is normal to light direction
 				tri_projected.dp = normal.x * light_direction.x + normal.y * light_direction.y + normal.z * light_direction.z;
 
-				// tri_projected.p[0] = MultiplyMatrixVector(tri_translated.p[0], mat_proj);
-				// tri_projected.p[1] = MultiplyMatrixVector(tri_translated.p[1], mat_proj);
-				// tri_projected.p[2] = MultiplyMatrixVector(tri_translated.p[2], mat_proj);
+				// tri_projected.p[0] = mat_proj * tri_translated.p[0];
+				// tri_projected.p[1] = mat_proj * tri_translated.p[1];
+				// tri_projected.p[2] = mat_proj * tri_translated.p[2];
 
-				tri_projected.p[0] = mat_proj * tri_translated.p[0];
-				tri_projected.p[1] = mat_proj * tri_translated.p[1];
-				tri_projected.p[2] = mat_proj * tri_translated.p[2];
+				tri_projected.p[0] = MultiplyMatrixVector(tri_translated.p[0], mat_proj);
+				tri_projected.p[1] = MultiplyMatrixVector(tri_translated.p[1], mat_proj);
+				tri_projected.p[2] = MultiplyMatrixVector(tri_translated.p[2], mat_proj);
 
 				tri_projected.p[0].x += 1.0f;
 				tri_projected.p[0].y += 1.0f;
@@ -191,7 +206,7 @@ int main(int argc, char *argv[])
 			}
 		};
 
-		std::cout << std::to_string(vec_tris_to_raster.size()) << std::endl;
+		// std::cout << std::to_string(vec_tris_to_raster.size()) << std::endl;
 
 		std::sort(vec_tris_to_raster.begin(), vec_tris_to_raster.end(), [](triangle &t1, triangle &t2)
 		{
