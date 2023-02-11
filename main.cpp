@@ -17,7 +17,7 @@ struct triangle
 	float dp;
 };
 
-glm::vec4 MultiplyMatrixVector(glm::vec4 &i, glm::mat4 &m)
+glm::vec4 Multiply_MatrixVector(glm::vec4 &i, glm::mat4 &m)
 {
 	glm::vec4 o = m * i;
 
@@ -28,6 +28,57 @@ glm::vec4 MultiplyMatrixVector(glm::vec4 &i, glm::mat4 &m)
 		o.z /= w;
 
 	return o;
+}
+
+glm::mat4 Create_MatrixProjection(float f_fov_degrees, float f_aspect_ratio, float f_near, float f_far)
+{
+	glm::mat4 m;
+
+	float f_fov_rad = 1.0f / tanf(f_fov_degrees * 0.5f / 180.f * 3.14159265358979f);
+	m[0][0] = f_aspect_ratio * f_fov_rad;
+	m[1][1] = f_fov_rad;
+	m[2][2] = f_far / (f_far - f_near);
+	m[3][2] = (-f_far * f_near) / (f_far - f_near);
+	m[2][3] = 1.0f;
+	m[3][3] = 0.0f;
+
+	return m;
+}
+
+glm::mat4 Create_MatrixRotationX(float f_angle_rad)
+{
+	glm::mat4 m;
+	m[0][0] = 1.0f;
+	m[1][1] = cosf(f_angle_rad);
+	m[1][2] = sinf(f_angle_rad);
+	m[2][1] = -sinf(f_angle_rad);
+	m[2][2] = cosf(f_angle_rad);
+	m[3][3] = 1.0f;
+	return m;
+}
+
+glm::mat4 Create_MatrixRotationY(float f_angle_rad)
+{
+	glm::mat4 m;
+	m[0][0] = cosf(f_angle_rad);
+	m[0][2] = sinf(f_angle_rad);
+	m[2][0] = -sinf(f_angle_rad);
+	m[1][1] = 1.0f;
+	m[2][2] = cosf(f_angle_rad);
+	m[3][3] = 1.0f;
+	return m;
+}
+
+glm::mat4 Create_MatrixRotationZ(float f_angle_rad)
+{
+	glm::mat4 m;
+	m[0][0] = cosf(f_angle_rad);
+	m[0][1] = sinf(f_angle_rad);
+	m[1][0] = -sinf(f_angle_rad);
+	m[1][1] = cosf(f_angle_rad);
+	m[2][2] = 1.0f;
+	m[3][3] = 1.0f;
+	return m;
 }
 
 void SDL_Init(float s_width, float s_height)
@@ -113,9 +164,8 @@ const float f_ASPECT_RATIO = (float)SCREEN_HEIGHT / (float)SCREEN_WIDTH;
 const float f_NEAR = 0.1f;
 const float f_FAR = 1000.0f;
 const float f_FOV = 90.0f;
-const float f_FOV_RAD = 1.0f / tanf(f_FOV * 0.5f / 180.f * 3.14159265358979f);
 
-glm::mat4 mat_proj;
+glm::mat4 mat_proj = Create_MatrixProjection(f_FOV, f_ASPECT_RATIO, f_NEAR, f_FAR);
 
 mesh obj;
 
@@ -126,13 +176,6 @@ int main(int argc, char *argv[])
 	SDL_Init(SCREEN_WIDTH, SCREEN_HEIGHT);
 
 	obj.LoadFromObjectFile("video_ship.obj");
-
-	mat_proj[0][0] = f_ASPECT_RATIO * f_FOV_RAD;
-	mat_proj[1][1] = f_FOV_RAD;
-	mat_proj[2][2] = f_FAR / (f_FAR - f_NEAR);
-	mat_proj[3][2] = (-f_FAR * f_NEAR) / (f_FAR - f_NEAR);
-	mat_proj[2][3] = 1.0f;
-	mat_proj[3][3] = 0.0f;
 
 	float f_elapsed_time = 0.0f;
 
@@ -188,7 +231,7 @@ int main(int argc, char *argv[])
 
 				for(int i=0; i<3; i++)
 				{
-					tri_projected.p[i] = MultiplyMatrixVector(tri_translated.p[i], mat_proj);
+					tri_projected.p[i] = Multiply_MatrixVector(tri_translated.p[i], mat_proj);
 				}
 
 				for (int i=0; i<3; i++)
@@ -202,8 +245,6 @@ int main(int argc, char *argv[])
 				vec_tris_to_raster.push_back(tri_projected);
 			}
 		};
-
-		// std::cout << std::to_string(vec_tris_to_raster.size()) << std::endl;
 
 		std::sort(vec_tris_to_raster.begin(), vec_tris_to_raster.end(), [](triangle &t1, triangle &t2)
 		{
