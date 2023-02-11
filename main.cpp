@@ -11,6 +11,25 @@ SDL_Renderer *renderer;
 SDL_Surface *surface;
 SDL_Rect *screen_rect;
 
+struct triangle
+{
+	glm::vec4 p[3];
+	float dp;
+};
+
+glm::vec4 MultiplyMatrixVector(glm::vec4 &i, glm::mat4 &m)
+{
+	glm::vec4 o = m * i;
+
+	float w = i.x * m[0][3] + i.y * m[1][3] + i.z * m[2][3] + m[3][3];
+	if (w != 0.0f)
+		o.x /= w;
+		o.y /= w;
+		o.z /= w;
+
+	return o;
+}
+
 void SDL_Init(float s_width, float s_height)
 {
 	// returns zero on success else non-zero
@@ -24,8 +43,15 @@ void SDL_Init(float s_width, float s_height)
 	SDL_GetClipRect(surface, screen_rect);
 }
 
-void DrawTri(float x1, float y1, float x2, float y2, float x3, float y3, float r, float g, float b, float a)
+void DrawTri(triangle tri, float r, float g, float b, float a)
 {
+	float x1 = tri.p[0].x;
+	float y1 = tri.p[0].y;
+	float x2 = tri.p[1].x;
+	float y2 = tri.p[1].y;
+	float x3 = tri.p[2].x;
+	float y3 = tri.p[2].y;
+
 	const SDL_Vertex verts[3] = {
 		{ SDL_FPoint{ x1, y1 }, SDL_Color{ r, b, g, a }, SDL_FPoint{ 0 }, },
         { SDL_FPoint{ x2, y2 }, SDL_Color{ r, b, g, a }, SDL_FPoint{ 0 }, },
@@ -35,23 +61,6 @@ void DrawTri(float x1, float y1, float x2, float y2, float x3, float y3, float r
 	SDL_SetRenderDrawColor(renderer, r, g, b, a);
 
 	SDL_RenderGeometry( renderer, nullptr, verts, 3, nullptr, 0 );
-}
-
-struct triangle
-{
-	glm::vec4 p[3];
-	float dp;
-};
-
-glm::vec4 MultiplyMatrixVector(glm::vec4 &i, glm::mat4 &m)
-{
-	glm::vec4 o = m * i;
-
-	float w = i.x * m[0][3] + i.y * m[1][3] + i.z * m[2][3] + m[3][3];
-	if (w != 0.0f)
-		o.x /= w; o.y /= w; o.z /= w;
-
-	return o;
 }
 
 struct mesh
@@ -144,11 +153,10 @@ int main(int argc, char *argv[])
 			// project tri -> tri_projected
 			triangle tri_projected, tri_translated;
 
-			// Offset into the screen
+			// offset into the screen
 			tri_translated = tri;
-			tri_translated.p[0].z = tri.p[0].z + 8.0f;
-			tri_translated.p[1].z = tri.p[1].z + 8.0f;
-			tri_translated.p[2].z = tri.p[2].z + 8.0f;
+			for(int i=0; i<3; i++)
+				tri_translated.p[i].z += 8.0f;
 
 			glm::vec3 normal, line1, line2;
 			line1.x = tri_translated.p[1].x - tri_translated.p[0].x;
@@ -178,22 +186,18 @@ int main(int argc, char *argv[])
 				// how similar is normal to light direction
 				tri_projected.dp = normal.x * light_direction.x + normal.y * light_direction.y + normal.z * light_direction.z;
 
-				tri_projected.p[0] = MultiplyMatrixVector(tri_translated.p[0], mat_proj);
-				tri_projected.p[1] = MultiplyMatrixVector(tri_translated.p[1], mat_proj);
-				tri_projected.p[2] = MultiplyMatrixVector(tri_translated.p[2], mat_proj);
+				for(int i=0; i<3; i++)
+				{
+					tri_projected.p[i] = MultiplyMatrixVector(tri_translated.p[i], mat_proj);
+				}
 
-				tri_projected.p[0].x += 1.0f;
-				tri_projected.p[0].y += 1.0f;
-				tri_projected.p[1].x += 1.0f;
-				tri_projected.p[1].y += 1.0f;
-				tri_projected.p[2].x += 1.0f;
-				tri_projected.p[2].y += 1.0f;
-				tri_projected.p[0].x *= 0.5f * SCREEN_WIDTH;
-				tri_projected.p[0].y *= 0.5f * SCREEN_HEIGHT;
-				tri_projected.p[1].x *= 0.5f * SCREEN_WIDTH;
-				tri_projected.p[1].y *= 0.5f * SCREEN_HEIGHT;
-				tri_projected.p[2].x *= 0.5f * SCREEN_WIDTH;
-				tri_projected.p[2].y *= 0.5f * SCREEN_HEIGHT;
+				for (int i=0; i<3; i++)
+				{
+					tri_projected.p[i].x += 1.0f;
+					tri_projected.p[i].y += 1.0f;
+					tri_projected.p[i].x *= 0.5f * SCREEN_WIDTH;
+					tri_projected.p[i].y *= 0.5f * SCREEN_HEIGHT;
+				}
 
 				vec_tris_to_raster.push_back(tri_projected);
 			}
@@ -210,10 +214,7 @@ int main(int argc, char *argv[])
 
 		for(auto &tri_projected : vec_tris_to_raster)
 		{
-			DrawTri(tri_projected.p[0].x, tri_projected.p[0].y,
-					tri_projected.p[1].x, tri_projected.p[1].y,
-					tri_projected.p[2].x, tri_projected.p[2].y,
-					tri_projected.dp*255.0f, tri_projected.dp*255.0f, tri_projected.dp*255.0f, 255.0f);
+			DrawTri(tri_projected, tri_projected.dp*255.0f, tri_projected.dp*255.0f, tri_projected.dp*255.0f, 255.0f);
 
 			std::cout << std::to_string(tri_projected.dp) << std::endl;
 		}
