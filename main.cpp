@@ -33,20 +33,13 @@ void DrawTri(float x1, float y1, float x2, float y2, float x3, float y3, float r
 	};
 
 	SDL_SetRenderDrawColor(renderer, r, g, b, a);
-	// SDL_RenderDrawLine(renderer, tri_1.x, tri_1.y, tri_2.x, tri_2.y);
-	// SDL_RenderDrawLine(renderer, tri_1.x, tri_1.y, tri_3.x, tri_3.y);
-	// SDL_RenderDrawLine(renderer, tri_2.x, tri_2.y, tri_3.x, tri_3.y);
+
 	SDL_RenderGeometry( renderer, nullptr, verts, 3, nullptr, 0 );
 }
 
-struct vec3d
-{
-	float x, y, z;
-};
-
 struct triangle
 {
-	vec3d p[3];
+	glm::vec4 p[3];
 	float dp;
 };
 
@@ -61,7 +54,7 @@ struct mesh
 			return false;
 
 		// Local cache of verts
-		std::vector<vec3d> verts;
+		std::vector<glm::vec4> verts;
 
 		while (!f.eof())
 		{
@@ -75,7 +68,7 @@ struct mesh
 
 			if (line[0] == 'v')
 			{
-				vec3d v;
+				glm::vec4 v;
 				s >> junk >> v.x >> v.y >> v.z;
 				verts.push_back(v);
 			}
@@ -92,27 +85,6 @@ struct mesh
 	}
 };
 
-struct mat4x4
-{
-	float m[4][4] = { 0 };
-};
-
-vec3d MultiplyMatrixVector(vec3d &v, mat4x4 &m)
-{
-	vec3d o;
-	o.x = v.x * m.m[0][0] + v.y * m.m[1][0] + v.z * m.m[2][0] + m.m[3][0];
-	o.y = v.x * m.m[0][1] + v.y * m.m[1][1] + v.z * m.m[2][1] + m.m[3][1];
-	o.z = v.x * m.m[0][2] + v.y * m.m[1][2] + v.z * m.m[2][2] + m.m[3][2];
-	float w = v.x * m.m[0][3] + v.y * m.m[1][3] + v.z * m.m[2][3] + m.m[3][3];
-
-	if (w != 0.0f)
-	{
-		o.x /= w; o.y /= w; o.z /= w;
-	}
-
-	return o;
-}
-
 const int SCREEN_WIDTH = 800;
 const int SCREEN_HEIGHT = 600;
 
@@ -123,52 +95,24 @@ const float f_FAR = 1000.0f;
 const float f_FOV = 90.0f;
 const float f_FOV_RAD = 1.0f / tanf(f_FOV * 0.5f / 180.f * 3.14159265358979f);
 
-mat4x4 mat_proj;
-mesh mesh_cube;
+glm::mat4 mat_proj;
 
-vec3d v_cam;
+mesh obj;
+
+glm::vec4 v_cam;
 
 int main(int argc, char *argv[])
 {
 	SDL_Init(SCREEN_WIDTH, SCREEN_HEIGHT);
 
-	mesh_cube.LoadFromObjectFile("teapot.obj");
+	obj.LoadFromObjectFile("teapot.obj");
 
-	
-	// mesh_cube.tris = {
-
-	// // SOUTH
-	// { 0.0f, 0.0f, 0.0f,    0.0f, 1.0f, 0.0f,    1.0f, 1.0f, 0.0f },
-	// { 0.0f, 0.0f, 0.0f,    1.0f, 1.0f, 0.0f,    1.0f, 0.0f, 0.0f },
-
-	// // EAST                                                      
-	// { 1.0f, 0.0f, 0.0f,    1.0f, 1.0f, 0.0f,    1.0f, 1.0f, 1.0f },
-	// { 1.0f, 0.0f, 0.0f,    1.0f, 1.0f, 1.0f,    1.0f, 0.0f, 1.0f },
-
-	// // NORTH                                                     
-	// { 1.0f, 0.0f, 1.0f,    1.0f, 1.0f, 1.0f,    0.0f, 1.0f, 1.0f },
-	// { 1.0f, 0.0f, 1.0f,    0.0f, 1.0f, 1.0f,    0.0f, 0.0f, 1.0f },
-
-	// // WEST                                                      
-	// { 0.0f, 0.0f, 1.0f,    0.0f, 1.0f, 1.0f,    0.0f, 1.0f, 0.0f },
-	// { 0.0f, 0.0f, 1.0f,    0.0f, 1.0f, 0.0f,    0.0f, 0.0f, 0.0f },
-
-	// // TOP                                                       
-	// { 0.0f, 1.0f, 0.0f,    0.0f, 1.0f, 1.0f,    1.0f, 1.0f, 1.0f },
-	// { 0.0f, 1.0f, 0.0f,    1.0f, 1.0f, 1.0f,    1.0f, 1.0f, 0.0f },
-
-	// // BOTTOM                                                    
-	// { 1.0f, 0.0f, 1.0f,    0.0f, 0.0f, 1.0f,    0.0f, 0.0f, 0.0f },
-	// { 1.0f, 0.0f, 1.0f,    0.0f, 0.0f, 0.0f,    1.0f, 0.0f, 0.0f },
-
-	// };
-
-	mat_proj.m[0][0] = f_ASPECT_RATIO * f_FOV_RAD;
-	mat_proj.m[1][1] = f_FOV_RAD;
-	mat_proj.m[2][2] = f_FAR / (f_FAR - f_NEAR);
-	mat_proj.m[3][2] = (-f_FAR * f_NEAR) / (f_FAR - f_NEAR);
-	mat_proj.m[2][3] = 1.0f;
-	mat_proj.m[3][3] = 0.0f;
+	mat_proj[0][0] = f_ASPECT_RATIO * f_FOV_RAD;
+	mat_proj[1][1] = f_FOV_RAD;
+	mat_proj[2][2] = f_FAR / (f_FAR - f_NEAR);
+	mat_proj[3][2] = (-f_FAR * f_NEAR) / (f_FAR - f_NEAR);
+	mat_proj[2][3] = 1.0f;
+	mat_proj[3][3] = 0.0f;
 
 	float f_elapsed_time = 0.0f;
 
@@ -184,7 +128,7 @@ int main(int argc, char *argv[])
 		std::vector<triangle> vec_tris_to_raster;
 
 		// draw tris
-		for(auto tri : mesh_cube.tris)
+		for(auto tri : obj.tris)
 		{
 			// project tri -> tri_projected
 			triangle tri_projected, tri_translated;
@@ -194,7 +138,7 @@ int main(int argc, char *argv[])
 			tri_translated.p[1].z = tri.p[1].z + 10.0f;
 			tri_translated.p[2].z = tri.p[2].z + 10.0f;
 
-			vec3d normal, line1, line2;
+			glm::vec3 normal, line1, line2;
 			line1.x = tri_translated.p[1].x - tri_translated.p[0].x;
 			line1.y = tri_translated.p[1].y - tri_translated.p[0].y;
 			line1.z = tri_translated.p[1].z - tri_translated.p[0].z;
@@ -215,16 +159,20 @@ int main(int argc, char *argv[])
 			   normal.y * (tri_translated.p[0].y - v_cam.y) +
 			   normal.z * (tri_translated.p[0].z - v_cam.z) < 0.0f)
 			{
-				vec3d light_direction = { 0.0f, 0.0f, -1.0f };
+				glm::vec3 light_direction = { 0.0f, 0.0f, -1.0f };
 				float l = sqrtf(light_direction.x*light_direction.x + light_direction.y*light_direction.y + light_direction.z*light_direction.z);
 				light_direction.x /= l; light_direction.y /= l; light_direction.z /= l;
 
 				// how similar is normal to light direction
 				tri_projected.dp = normal.x * light_direction.x + normal.y * light_direction.y + normal.z * light_direction.z;
 
-				tri_projected.p[0] = MultiplyMatrixVector(tri_translated.p[0], mat_proj);
-				tri_projected.p[1] = MultiplyMatrixVector(tri_translated.p[1], mat_proj);
-				tri_projected.p[2] = MultiplyMatrixVector(tri_translated.p[2], mat_proj);
+				// tri_projected.p[0] = MultiplyMatrixVector(tri_translated.p[0], mat_proj);
+				// tri_projected.p[1] = MultiplyMatrixVector(tri_translated.p[1], mat_proj);
+				// tri_projected.p[2] = MultiplyMatrixVector(tri_translated.p[2], mat_proj);
+
+				tri_projected.p[0] = mat_proj * tri_translated.p[0];
+				tri_projected.p[1] = mat_proj * tri_translated.p[1];
+				tri_projected.p[2] = mat_proj * tri_translated.p[2];
 
 				tri_projected.p[0].x += 1.0f;
 				tri_projected.p[0].y += 1.0f;
@@ -243,6 +191,8 @@ int main(int argc, char *argv[])
 			}
 		};
 
+		std::cout << std::to_string(vec_tris_to_raster.size()) << std::endl;
+
 		std::sort(vec_tris_to_raster.begin(), vec_tris_to_raster.end(), [](triangle &t1, triangle &t2)
 		{
 			float z1 = (t1.p[0].z + t1.p[1].z + t1.p[2].z) / 3.0f;
@@ -256,12 +206,12 @@ int main(int argc, char *argv[])
 					tri_projected.p[1].x, tri_projected.p[1].y,
 					tri_projected.p[2].x, tri_projected.p[2].y,
 					tri_projected.dp*255.0f, tri_projected.dp*255.0f, tri_projected.dp*255.0f, 255.0f);
+
+			std::cout << std::to_string(tri_projected.dp) << std::endl;
 		}
 
 		f_elapsed_time = (SDL_GetTicks() - start_time) / 1000.0;
 		float f_fps = (f_elapsed_time > 0) ? 1000.0f / f_elapsed_time : 0.0f;
-
-		std::cout << std::to_string(f_fps) << std::endl;
 
 		SDL_RenderPresent(renderer);
 	};
