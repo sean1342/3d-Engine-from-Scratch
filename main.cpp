@@ -1,5 +1,7 @@
 #include <SDL2/SDL.h>
 #include <glm/glm.hpp>
+#include "glm/gtc/matrix_transform.hpp"
+// #include <glm/gtx/transform.hpp>
 #include <vector>
 #include <iostream>
 #include <fstream>
@@ -17,67 +19,18 @@ struct triangle
 	float dp;
 };
 
-glm::vec4 Multiply_MatrixVector(glm::vec4 &i, glm::mat4 &m)
+glm::mat4 Matrix_PointAt(glm::vec3 pos, glm::vec3 target, glm::vec3 up)
 {
-	glm::vec4 o = m * i;
+	glm::vec3 new_forward = glm::normalize(target - pos);
+	glm::vec3 a = new_forward * glm::dot(up, new_forward);
+	glm::vec3 new_up = glm::normalize(up - a);
+	glm::vec3 new_right = glm::cross(new_up, new_forward);
 
-	float w = i.x * m[0][3] + i.y * m[1][3] + i.z * m[2][3] + m[3][3];
-	if (w != 0.0f)
-		o.x /= w;
-		o.y /= w;
-		o.z /= w;
-
-	return o;
-}
-
-glm::mat4 Create_MatrixProjection(float f_fov_degrees, float f_aspect_ratio, float f_near, float f_far)
-{
 	glm::mat4 m;
-
-	float f_fov_rad = 1.0f / tanf(f_fov_degrees * 0.5f / 180.f * 3.14159265358979f);
-	m[0][0] = f_aspect_ratio * f_fov_rad;
-	m[1][1] = f_fov_rad;
-	m[2][2] = f_far / (f_far - f_near);
-	m[3][2] = (-f_far * f_near) / (f_far - f_near);
-	m[2][3] = 1.0f;
-	m[3][3] = 0.0f;
-
-	return m;
-}
-
-glm::mat4 Create_MatrixRotationX(float f_angle_rad)
-{
-	glm::mat4 m;
-	m[0][0] = 1.0f;
-	m[1][1] = cosf(f_angle_rad);
-	m[1][2] = sinf(f_angle_rad);
-	m[2][1] = -sinf(f_angle_rad);
-	m[2][2] = cosf(f_angle_rad);
-	m[3][3] = 1.0f;
-	return m;
-}
-
-glm::mat4 Create_MatrixRotationY(float f_angle_rad)
-{
-	glm::mat4 m;
-	m[0][0] = cosf(f_angle_rad);
-	m[0][2] = sinf(f_angle_rad);
-	m[2][0] = -sinf(f_angle_rad);
-	m[1][1] = 1.0f;
-	m[2][2] = cosf(f_angle_rad);
-	m[3][3] = 1.0f;
-	return m;
-}
-
-glm::mat4 Create_MatrixRotationZ(float f_angle_rad)
-{
-	glm::mat4 m;
-	m[0][0] = cosf(f_angle_rad);
-	m[0][1] = sinf(f_angle_rad);
-	m[1][0] = -sinf(f_angle_rad);
-	m[1][1] = cosf(f_angle_rad);
-	m[2][2] = 1.0f;
-	m[3][3] = 1.0f;
+	m[0][0] = new_right.x;		m[0][1] = new_right.y;		m[0][2] = new_right.z;		m[0][3] = 0.0f;
+	m[1][0] = new_up.x;			m[1][1] = new_up.y;			m[1][2] = new_up.z;			m[1][3] = 0.0f;
+	m[2][0] = new_forward.x;	m[2][1] = new_forward.y;	m[2][2] = new_forward.z;	m[2][3] = 0.0f;
+	m[3][0] = pos.x;			m[3][1] = pos.y;			m[3][2] = pos.z;			m[3][3] = 1.0f;
 	return m;
 }
 
@@ -165,17 +118,26 @@ const float f_NEAR = 0.1f;
 const float f_FAR = 1000.0f;
 const float f_FOV = 90.0f;
 
-glm::mat4 mat_proj = Create_MatrixProjection(f_FOV, f_ASPECT_RATIO, f_NEAR, f_FAR);
-
 mesh obj;
 
-glm::vec3 v_cam;
+glm::vec4 v_cam;
+glm::vec4 v_look_dir;
 
 int main(int argc, char *argv[])
 {
 	SDL_Init(SCREEN_WIDTH, SCREEN_HEIGHT);
 
-	obj.LoadFromObjectFile("video_ship.obj");
+	obj.LoadFromObjectFile("axis.obj");
+
+	glm::mat4 mat_proj = glm::perspective(glm::radians(f_FOV), 1/f_ASPECT_RATIO, f_NEAR, f_FAR);
+
+	v_look_dir = glm::vec4(0, 0, 1, 1);
+	glm::vec3 v_up = glm::vec3(0, 1, 0);
+	glm::vec3 v_target = v_cam + v_look_dir;
+
+	glm::mat4 mat_cam = Matrix_PointAt(v_cam, v_target, v_up);
+
+	glm::mat4 mat_view = glm::inverse(mat_cam);
 
 	float f_elapsed_time = 0.0f;
 
@@ -184,7 +146,6 @@ int main(int argc, char *argv[])
 	{
 		int start_time = SDL_GetTicks();
 
-		// clear win and fill with black
 		SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
 		SDL_RenderClear(renderer);
 
@@ -193,47 +154,38 @@ int main(int argc, char *argv[])
 		// draw tris
 		for(auto tri : obj.tris)
 		{
-			// project tri -> tri_projected
 			triangle tri_projected, tri_translated;
 
-			// offset into the screen
+			glm::mat4 mat_trans = glm::mat4(1.0f);
+			mat_trans = glm::translate(mat_trans, glm::vec3(0.0f, 0.0f, 8.0f));
+
+			// tri_translated.p[0] = tri.p[0] * mat_trans;
+			// tri_translated.p[1] = tri.p[1] * mat_trans;
+			// tri_translated.p[2] = tri.p[2] * mat_trans;
+
 			tri_translated = tri;
 			for(int i=0; i<3; i++)
-				tri_translated.p[i].z += 8.0f;
+				tri_translated.p[i].z += 16.0f;
 
 			glm::vec3 normal, line1, line2;
-			line1.x = tri_translated.p[1].x - tri_translated.p[0].x;
-			line1.y = tri_translated.p[1].y - tri_translated.p[0].y;
-			line1.z = tri_translated.p[1].z - tri_translated.p[0].z;
+			line1 = tri_translated.p[1] - tri_translated.p[0];
+			line2 = tri_translated.p[2] - tri_translated.p[0];
 
-			line2.x = tri_translated.p[2].x - tri_translated.p[0].x;
-			line2.y = tri_translated.p[2].y - tri_translated.p[0].y;
-			line2.z = tri_translated.p[2].z - tri_translated.p[0].z;
+			normal = glm::normalize(glm::cross(line1, line2));
 
-			normal.x = line1.y * line2.z - line1.z * line2.y;
-			normal.y = line1.z * line2.x - line1.x * line2.z;
-			normal.z = line1.x * line2.y - line1.y * line2.x;
+			glm::vec3 v_cam_ray = tri_translated.p[0] - v_cam;
 
-			float l = sqrtf(normal.x*normal.x + normal.y*normal.y + normal.z*normal.z);
-			normal.x /= l; normal.y /= l; normal.z /= l;
-
-			// if(normal.z < 0)
-			if(normal.x * (tri_translated.p[0].x - v_cam.x) +
-			   normal.y * (tri_translated.p[0].y - v_cam.y) +
-			   normal.z * (tri_translated.p[0].z - v_cam.z) < 0.0f)
+			if(glm::dot(normal, v_cam_ray) < 0.0f)
 			{
-				glm::vec3 light_direction = { 0.0f, 0.0f, -1.0f };
-				float l = sqrtf(light_direction.x*light_direction.x + light_direction.y*light_direction.y + light_direction.z*light_direction.z);
-				light_direction.x /= l; light_direction.y /= l; light_direction.z /= l;
+				glm::vec3 light_direction = glm::normalize(glm::vec3({ 0.0f, 0.0f, -1.0f }));
 
 				// how similar is normal to light direction
-				tri_projected.dp = normal.x * light_direction.x + normal.y * light_direction.y + normal.z * light_direction.z;
+				tri_projected.dp = std::max(0.1f, glm::dot(normal, light_direction));
 
 				for(int i=0; i<3; i++)
-				{
-					tri_projected.p[i] = Multiply_MatrixVector(tri_translated.p[i], mat_proj);
-				}
+					tri_projected.p[i] = glm::normalize(mat_proj * tri_translated.p[i]);
 
+				// offset verts to scale into view space on screen
 				for (int i=0; i<3; i++)
 				{
 					tri_projected.p[i].x += 1.0f;
@@ -246,6 +198,7 @@ int main(int argc, char *argv[])
 			}
 		};
 
+		// sort triangles to render from back to front (painters algorithm)
 		std::sort(vec_tris_to_raster.begin(), vec_tris_to_raster.end(), [](triangle &t1, triangle &t2)
 		{
 			float z1 = (t1.p[0].z + t1.p[1].z + t1.p[2].z) / 3.0f;
